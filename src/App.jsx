@@ -488,11 +488,12 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação com o nome correto da coluna no Supabase
+        // 3. Gravar Solicitação com o protocolo gerado automaticamente
         const payloadSolicitacao = {
+          protocolo: 'SOL-' + Math.floor(100000 + Math.random() * 900000),
           beneficiario_id: currentBeneficiarioId,
           medicamento_id: medicamento.id,
-          qtd_solicitada: 1, // Corrigido para corresponder à coluna qtd_solicitada da tabela
+          qtd_solicitada: 1,
           tratamento: tratamento,
           receita_url: receita_url,
           consentimento_lgpd: consentimento,
@@ -508,7 +509,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
         onClose();
       } catch (err) {
         console.error(err);
-        setErro('Erro ao gravar no banco. Verifique se as colunas novas foram criadas no Supabase.');
+        setErro('Erro do Supabase: ' + err.message); // Exibe o erro técnico exato na tela
       } finally {
         setEnviando(false);
       }
