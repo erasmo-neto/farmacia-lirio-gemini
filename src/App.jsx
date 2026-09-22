@@ -488,11 +488,11 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação (removendo restrições de colunas antigas se existirem)
+        // 3. Gravar Solicitação com o nome correto da coluna no Supabase
         const payloadSolicitacao = {
           beneficiario_id: currentBeneficiarioId,
           medicamento_id: medicamento.id,
-          quantidade_solicitada: 1, // Valor numérico padrão para compatibilidade
+          qtd_solicitada: 1, // Corrigido para corresponder à coluna qtd_solicitada da tabela
           tratamento: tratamento,
           receita_url: receita_url,
           consentimento_lgpd: consentimento,
