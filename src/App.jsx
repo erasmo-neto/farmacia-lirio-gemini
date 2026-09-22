@@ -1,19 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ShieldCheck, Box, Heart, AlertCircle, Plus, Info, CheckCircle2, Lock, LogIn, FileText, Settings, User } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('inicio');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [showModalDoacao, setShowModalDoacao] = useState(false);
 
-  // Dados Simulados (Estado da Aplicação)
-  const [medicamentos, setMedicamentos] = useState([
-    { id: 1, nome: 'ABLOK PLUS', principio: 'Atenolol 25mg, clortalidona 12,5mg', categoria: 'Anti-hipertensivo' },
-    { id: 2, nome: 'MICROVLAR', principio: 'Levonorgestrel 0,15mg + etinilestradiol 0,03mg', categoria: 'Anticoncepcional' },
-    { id: 3, nome: 'ADDERA CAL', principio: 'Cálcio Citrato, Malato, vitamina D', categoria: 'Suplemento / Vitamina' },
-    { id: 4, nome: 'ACHEFLAN', principio: 'Cordea Verbenacea DC 5 mg/g', categoria: 'Analgésico / Anti-inflamatório' }
-  ]);
-
+  // Estados dos Dados Reais do Supabase
+  const [medicamentos, setMedicamentos] = useState([]);
   const [categorias, setCategorias] = useState([
     'Anti-hipertensivo', 
     'Anticoncepcional', 
@@ -25,17 +20,49 @@ export default function App() {
     'Antibiótico / Antimicrobiano', 
     'Outros'
   ]);
-
   const [doadores, setDoadores] = useState([
     'Cavalcanti Orsi', 
     'Dr. Javier', 
     'Amostra Grátis Laboratório', 
-    'Doação Anónima Comunidade'
+    'Doação Anônima Comunidade'
   ]);
+  const [lotes, setLotes] = useState([]);
 
-  const [lotes, setLotes] = useState([
-    { id: 1, medicamento_id: 1, lote: '50901217', validade: '10/2027', qtd_caixas: 7, unidades_por_caixa: 10, doador: 'Cavalcanti Orsi' }
-  ]);
+  // Carregar dados do Supabase ao iniciar
+  useEffect(() => {
+    carregarDadosDoSupabase();
+  }, []);
+
+  async function carregarDadosDoSupabase() {
+    try {
+      // Buscar Medicamentos
+      const { data: dadosMed, error: erroMed } = await supabase.from('medicamentos').select('*');
+      if (!erroMed && dadosMed) {
+        setMedicamentos(dadosMed.map(m => ({
+          id: m.id,
+          nome: m.nome_comercial,
+          principio: m.principio_ativo,
+          categoria: m.categoria || 'Outros'
+        })));
+      }
+
+      // Buscar Lotes / Estoque
+      const { data: dadosLotes, error: erroLotes } = await supabase.from('estoque_lotes').select('*');
+      if (!erroLotes && dadosLotes) {
+        setLotes(dadosLotes.map(l => ({
+          id: l.id,
+          medicamento_id: l.medicamento_id,
+          lote: l.numero_lote,
+          validade: l.data_validade,
+          qtd_caixas: l.qtd_caixas,
+          unidades_por_caixa: l.unidades_por_caixa,
+          doador: l.parceiro_doador
+        })));
+      }
+    } catch (error) {
+      console.error('Erro ao conectar com o Supabase:', error);
+    }
+  }
 
   // --- COMPONENTES DAS PÁGINAS ---
 
@@ -118,7 +145,6 @@ export default function App() {
         </div>
       </section>
 
-      {/* Como Funciona */}
       <section className="space-y-6">
         <h3 className="text-2xl font-bold text-center text-slate-800">Como funciona o projeto?</h3>
         <div className="grid md:grid-cols-3 gap-4">
@@ -240,7 +266,6 @@ export default function App() {
 
     return (
       <div className="max-w-6xl mx-auto p-4 flex flex-col md:flex-row gap-6">
-        {/* Menu Lateral Admin */}
         <div className="w-full md:w-64 shrink-0 space-y-2">
           <div className="bg-emerald-900 text-white p-4 rounded-xl mb-4">
             <p className="text-xs text-emerald-300 uppercase font-bold tracking-wider mb-1">Voluntário Logado</p>
@@ -259,12 +284,6 @@ export default function App() {
             <FileText className="w-5 h-5" /> Triagem de Pedidos
           </button>
           <button 
-            onClick={() => setAdminTab('supabase')}
-            className={`w-full text-left px-4 py-3 rounded-lg font-medium flex items-center gap-3 transition-colors ${adminTab === 'supabase' ? 'bg-emerald-100 text-emerald-800' : 'hover:bg-slate-100 text-slate-600'}`}
-          >
-            <Settings className="w-5 h-5" /> Banco de Dados
-          </button>
-          <button 
             onClick={() => setIsAdminAuthenticated(false)}
             className="w-full text-left px-4 py-3 rounded-lg font-medium flex items-center gap-3 text-red-600 hover:bg-red-50 mt-8"
           >
@@ -272,14 +291,13 @@ export default function App() {
           </button>
         </div>
 
-        {/* Área Principal Admin */}
         <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           {adminTab === 'lotes' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800">Estoque e Lotes</h2>
-                  <p className="text-slate-500 text-sm">Controle interno de quantidades e validades.</p>
+                  <p className="text-slate-500 text-sm">Controle interno de quantidades sincronizado com o Supabase.</p>
                 </div>
                 <button 
                   onClick={() => setShowModalNovoLote(true)}
@@ -305,7 +323,7 @@ export default function App() {
                       return (
                         <tr key={lote.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="p-3">
-                            <p className="font-bold text-slate-800">{med?.nome}</p>
+                            <p className="font-bold text-slate-800">{med?.nome || 'Medicamento'}</p>
                             <p className="text-xs text-slate-500">{med?.principio}</p>
                           </td>
                           <td className="p-3">
@@ -326,26 +344,6 @@ export default function App() {
             </div>
           )}
 
-          {adminTab === 'supabase' && (
-            <div className="space-y-6 max-w-lg">
-              <h2 className="text-2xl font-bold text-slate-800">Conexão Supabase</h2>
-              <p className="text-slate-500 text-sm mb-6">Configure as variáveis de ambiente para sincronizar os dados reais do banco PostgreSQL.</p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Project URL</label>
-                  <input type="text" placeholder="https://xxxx.supabase.co" className="w-full p-2 border border-slate-300 rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Anon / Public Key</label>
-                  <input type="password" placeholder="eyJh..." className="w-full p-2 border border-slate-300 rounded-lg" />
-                </div>
-                <button className="bg-slate-800 text-white font-medium py-2 px-4 rounded-lg w-full">
-                  Testar Conexão e Salvar
-                </button>
-              </div>
-            </div>
-          )}
-
           {adminTab === 'pedidos' && (
             <div className="text-center py-12 text-slate-500">
               Módulo de triagem de pedidos em desenvolvimento.
@@ -353,23 +351,96 @@ export default function App() {
           )}
         </div>
 
-        {/* Modal: Novo Lote */}
         {showModalNovoLote && (
-          <ModalEntradaLote onClose={() => setShowModalNovoLote(false)} />
+          <ModalEntradaLote 
+            onClose={() => setShowModalNovoLote(false)} 
+            onSuccess={carregarDadosDoSupabase}
+            medicamentos={medicamentos}
+            categorias={categorias}
+            doadores={doadores}
+            setCategorias={setCategorias}
+            setDoadores={setDoadores}
+          />
         )}
       </div>
     );
   };
 
-  const ModalEntradaLote = ({ onClose }) => {
-    const [tipoMedicamento, setTipoMedicamento] = useState('existente'); // 'existente' | 'novo'
-    const [novaCategoria, setNovaCategoria] = useState('');
-    const [novoDoador, setNovoDoador] = useState('');
-    const [selectedDoador, setSelectedDoador] = useState(doadores[0]);
-    const [selectedCategoria, setSelectedCategoria] = useState(categorias[0]);
+  const ModalEntradaLote = ({ onClose, onSuccess, medicamentos, categorias, doadores, setCategorias, setDoadores }) => {
+    const [tipoMedicamento, setTipoMedicamento] = useState('existente');
+    const [medSelecionado, setMedSelecionado] = useState(medicamentos[0]?.id || '');
     
+    // Novo Medicamento
+    const [novoNome, setNovoNome] = useState('');
+    const [novoPrincipio, setNovoPrincipio] = useState('');
+    const [selectedCategoria, setSelectedCategoria] = useState(categorias[0]);
+    const [novaCategoriaInput, setNovaCategoriaInput] = useState('');
+
+    // Lote
+    const [numLote, setNumLote] = useState('');
+    const [dataValidade, setDataValidade] = useState('');
+    const [qtdCaixas, setQtdCaixas] = useState(1);
+    const [unidadesCaixa, setUnidadesCaixa] = useState(10);
+    
+    // Doador
+    const [selectedDoador, setSelectedDoador] = useState(doadores[0]);
+    const [novoDoadorInput, setNovoDoadorInput] = useState('');
+
     const isAddingCategoria = selectedCategoria === 'adicionar_nova';
     const isAddingDoador = selectedDoador === 'adicionar_novo';
+
+    const handleSalvarLote = async (e) => {
+      e.preventDefault();
+      try {
+        let medIdFinal = medSelecionado;
+
+        // Se for novo medicamento, insere na tabela 'medicamentos' primeiro
+        if (tipoMedicamento === 'novo') {
+          const categoriaFinal = isAddingCategoria ? novaCategoriaInput : selectedCategoria;
+          
+          if (isAddingCategoria && novaCategoriaInput.trim()) {
+            setCategorias([...categorias, novaCategoriaInput.trim()]);
+          }
+
+          const { data: medInserido, error: errMed } = await supabase
+            .from('medicamentos')
+            .insert([{ 
+              nome_comercial: novoNome.toUpperCase(), 
+              principio_ativo: novoPrincipio, 
+              categoria: categoriaFinal 
+            }])
+            .select()
+            .single();
+
+          if (errMed) throw errMed;
+          medIdFinal = medInserido.id;
+        }
+
+        const doadorFinal = isAddingDoador ? novoDoadorInput : selectedDoador;
+        if (isAddingDoador && novoDoadorInput.trim()) {
+          setDoadores([...doadores, novoDoadorInput.trim()]);
+        }
+
+        // Insere o lote na tabela 'estoque_lotes'
+        const { error: errLote } = await supabase
+          .from('estoque_lotes')
+          .insert([{
+            medicamento_id: medIdFinal,
+            numero_lote: numLote,
+            data_validade: dataValidade,
+            qtd_caixas: parseInt(qtdCaixas),
+            unidades_por_caixa: parseInt(unidadesCaixa),
+            parceiro_doador: doadorFinal
+          }]);
+
+        if (errLote) throw errLote;
+
+        onSuccess();
+        onClose();
+      } catch (error) {
+        alert('Erro ao salvar no Supabase: ' + error.message);
+      }
+    };
 
     return (
       <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -379,49 +450,67 @@ export default function App() {
             <button onClick={onClose} className="text-emerald-200 hover:text-white">✕</button>
           </div>
           
-          <div className="p-6 space-y-6">
-            {/* Toggle Tipo Medicamento */}
+          <form onSubmit={handleSalvarLote} className="p-6 space-y-6">
             <div className="flex bg-slate-100 p-1 rounded-lg">
               <button 
+                type="button"
                 className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${tipoMedicamento === 'existente' ? 'bg-white shadow text-emerald-800' : 'text-slate-500'}`}
                 onClick={() => setTipoMedicamento('existente')}
               >
-                Medicamento do Catálogo
+                Existente no Catálogo
               </button>
               <button 
+                type="button"
                 className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors ${tipoMedicamento === 'novo' ? 'bg-amber-400 shadow text-amber-950' : 'text-slate-500'}`}
                 onClick={() => setTipoMedicamento('novo')}
               >
-                + Cadastrar Remédio Novo
+                + Cadastrar Novo
               </button>
             </div>
 
-            {/* Form Medicamento */}
             {tipoMedicamento === 'existente' ? (
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Selecione o Medicamento</label>
-                <select className="w-full p-2 border border-slate-300 rounded-lg">
-                  {medicamentos.map(m => <option key={m.id}>{m.nome} ({m.principio})</option>)}
+                <select 
+                  value={medSelecionado}
+                  onChange={(e) => setMedSelecionado(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                >
+                  {medicamentos.map(m => <option key={m.id} value={m.id}>{m.nome} ({m.principio})</option>)}
                 </select>
               </div>
             ) : (
               <div className="bg-amber-50 p-4 border border-amber-200 rounded-lg space-y-4">
-                <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2"> Dados do Novo Medicamento</h4>
+                <h4 className="text-sm font-bold text-amber-800">Dados do Novo Medicamento</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nome Comercial</label>
-                    <input type="text" placeholder="Ex: DIPIRONA 500MG" className="w-full p-2 border border-slate-300 rounded-lg" />
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Ex: DIPIRONA 500MG" 
+                      value={novoNome} 
+                      onChange={e => setNovoNome(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-lg bg-white" 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Princípio Ativo</label>
-                    <input type="text" placeholder="Ex: Dipirona monoidratada" className="w-full p-2 border border-slate-300 rounded-lg" />
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Ex: Dipirona monoidratada" 
+                      value={novoPrincipio} 
+                      onChange={e => setNovoPrincipio(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-lg bg-white" 
+                    />
                   </div>
-                  <div>
+                  <div className="col-span-2">
                     <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Categoria</label>
                     <select 
                       value={selectedCategoria}
                       onChange={(e) => setSelectedCategoria(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded-lg"
+                      className="w-full p-2 border border-slate-300 rounded-lg bg-white"
                     >
                       {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                       <option value="adicionar_nova" className="font-bold text-emerald-700">+ Nova Categoria...</option>
@@ -429,50 +518,70 @@ export default function App() {
                     {isAddingCategoria && (
                       <input 
                         type="text" 
-                        placeholder="Nome da nova categoria" 
-                        value={novaCategoria}
-                        onChange={(e) => setNovaCategoria(e.target.value)}
-                        className="w-full mt-2 p-2 border border-emerald-400 bg-white rounded-lg focus:ring-1 focus:ring-emerald-500" 
+                        required
+                        placeholder="Digite o nome da nova categoria" 
+                        value={novaCategoriaInput}
+                        onChange={(e) => setNovaCategoriaInput(e.target.value)}
+                        className="w-full mt-2 p-2 border border-emerald-400 bg-white rounded-lg" 
                       />
                     )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Regra de Validade</label>
-                    <select className="w-full p-2 border border-slate-300 rounded-lg">
-                      <option>Uso Geral (Receita 180 dias)</option>
-                      <option>Anticoncepcional (Receita 365 dias)</option>
-                    </select>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Form Dados do Lote (Apenas Admin vê isso) */}
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Número do Lote</label>
-                <input type="text" placeholder="Ex: L78912" className="w-full p-2 border border-slate-300 rounded-lg" />
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: L78912" 
+                  value={numLote} 
+                  onChange={e => setNumLote(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Validade (Mês/Ano)</label>
-                <input type="month" className="w-full p-2 border border-slate-300 rounded-lg" />
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ex: 10/2027" 
+                  value={dataValidade} 
+                  onChange={e => setDataValidade(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg" 
+                />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Qtd. de Caixas (Físico)</label>
-                <input type="number" defaultValue={1} min={1} className="w-full p-2 border border-slate-300 rounded-lg" />
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Qtd. de Caixas</label>
+                <input 
+                  type="number" 
+                  min={1} 
+                  required
+                  value={qtdCaixas} 
+                  onChange={e => setQtdCaixas(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Unidades por Caixa</label>
-                <input type="number" defaultValue={10} min={1} className="w-full p-2 border border-slate-300 rounded-lg" />
+                <input 
+                  type="number" 
+                  min={1} 
+                  required
+                  value={unidadesCaixa} 
+                  onChange={e => setUnidadesCaixa(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg" 
+                />
               </div>
               
-              {/* Doador Select */}
               <div className="col-span-2">
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Doador / Parceiro / Médico</label>
                 <select 
                   value={selectedDoador}
                   onChange={(e) => setSelectedDoador(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg"
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
                 >
                   {doadores.map(d => <option key={d} value={d}>{d}</option>)}
                   <option value="adicionar_novo" className="font-bold text-emerald-700">+ Cadastrar Novo Doador...</option>
@@ -480,20 +589,21 @@ export default function App() {
                 {isAddingDoador && (
                   <input 
                     type="text" 
+                    required
                     placeholder="Digite o nome do novo doador" 
-                    value={novoDoador}
-                    onChange={(e) => setNovoDoador(e.target.value)}
-                    className="w-full mt-2 p-2 border border-emerald-400 bg-white rounded-lg focus:ring-1 focus:ring-emerald-500" 
+                    value={novoDoadorInput}
+                    onChange={(e) => setNovoDoadorInput(e.target.value)}
+                    className="w-full mt-2 p-2 border border-emerald-400 bg-white rounded-lg" 
                   />
                 )}
               </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
-              <button onClick={onClose} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancelar</button>
-              <button className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg">Salvar Lote e Estoque</button>
+              <button type="button" onClick={onClose} className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg">Cancelar</button>
+              <button type="submit" className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg">Salvar Lote no Supabase</button>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     );
@@ -518,15 +628,15 @@ export default function App() {
           <div className="bg-red-50 border border-red-100 p-4 rounded-lg mt-4">
             <h3 className="font-bold text-red-800 flex items-center gap-2 mb-2"><AlertCircle className="w-4 h-4" /> NÃO podemos receber:</h3>
             <ul className="text-sm text-red-700 space-y-1 list-disc pl-5">
-              <li>Medicamentos de Controle Especial (Receita Azul/Amarela/Branca de controle).</li>
-              <li>Medicamentos termolábeis (que precisam de geladeira).</li>
+              <li>Medicamentos de Controle Especial (Portaria 344).</li>
+              <li>Medicamentos termolábeis (que precisam de refrigeração).</li>
               <li>Líquidos, cremes ou pomadas já abertos.</li>
             </ul>
           </div>
 
           <div className="pt-4 text-center space-y-3">
             <p className="text-sm text-slate-500">Para combinar a entrega da sua doação, entre em contato:</p>
-            <a href="https://wa.me/5500000000000" target="_blank" rel="noreferrer" className="block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-sm">
+            <a href="https://wa.me/5515999999999" target="_blank" rel="noreferrer" className="block w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow-sm">
               Falar no WhatsApp da Igreja
             </a>
             <button onClick={() => setShowModalDoacao(false)} className="text-slate-400 hover:text-slate-600 text-sm font-medium mt-2">
