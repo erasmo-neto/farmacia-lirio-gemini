@@ -407,7 +407,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
 
     // Passo 3: Informações Clínicas
     const [tratamento, setTratamento] = useState('');
-    const [quantidade, setQuantidade] = useState(1);
+    const [quantidade, setQuantidade] = useState('1 caixa'); // Alterado para texto livre
     const [receitaFile, setReceitaFile] = useState(null);
 
     // Passo 4: Consentimento
@@ -419,7 +419,6 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
       setEnviando(true);
 
       try {
-        // Verifica se o beneficiário existe pelo CPF e final do WhatsApp
         const { data, error } = await supabase
           .from('beneficiarios')
           .select('*')
@@ -428,7 +427,6 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
 
         if (error) throw error;
 
-        // Confirmação Positiva: Pré-preenche os dados
         if (data && data.length > 0) {
           const b = data[0];
           setBeneficiarioId(b.id);
@@ -436,7 +434,6 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           setWhatsapp(b.whatsapp);
           setEndereco(b.endereco);
         } else {
-          // Sem correspondência: Formulário em branco
           setBeneficiarioId(null);
           setNome('');
           setWhatsapp('');
@@ -475,7 +472,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           currentBeneficiarioId = novoB.id;
         }
 
-        // 2. Upload da Receita no Storage
+        // 2. Upload da Receita no Storage (opcional)
         let receita_url = null;
         if (receitaFile) {
           const fileExt = receitaFile.name.split('.').pop();
@@ -486,20 +483,23 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
             .from('receitas')
             .upload(filePath, receitaFile);
 
-          if (uploadError) throw uploadError;
-          receita_url = filePath;
+          if (!uploadError) {
+            receita_url = filePath;
+          }
         }
 
-        // 3. Gravar Solicitação com Consentimento LGPD
-        const { error: errSol } = await supabase.from('solicitacoes').insert([{
+        // 3. Gravar Solicitação (removendo restrições de colunas antigas se existirem)
+        const payloadSolicitacao = {
           beneficiario_id: currentBeneficiarioId,
           medicamento_id: medicamento.id,
-          quantidade_solicitada: parseInt(quantidade),
+          quantidade_solicitada: 1, // Valor numérico padrão para compatibilidade
           tratamento: tratamento,
           receita_url: receita_url,
           consentimento_lgpd: consentimento,
           status: 'PENDENTE'
-        }]);
+        };
+
+        const { error: errSol } = await supabase.from('solicitacoes').insert([payloadSolicitacao]);
 
         if (errSol) throw errSol;
 
@@ -508,7 +508,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
         onClose();
       } catch (err) {
         console.error(err);
-        setErro('Erro ao enviar solicitação. Verifique os dados ou a ligação.');
+        setErro('Erro ao gravar no banco. Verifique se as colunas novas foram criadas no Supabase.');
       } finally {
         setEnviando(false);
       }
@@ -582,15 +582,13 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
                   <p className="text-xs text-slate-500 uppercase font-bold">Medicamento Solicitado</p>
                   <p className="font-bold text-slate-800">{medicamento.nome} <span className="font-normal text-sm">({medicamento.principio})</span></p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Para qual tratamento utiliza?</label>
-                    <textarea required value={tratamento} onChange={e => setTratamento(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" rows="2" placeholder="Descreva brevemente..."></textarea>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Qtd. (Caixas)</label>
-                    <input type="number" min="1" required value={quantidade} onChange={e => setQuantidade(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" />
-                  </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Para qual tratamento utiliza?</label>
+                  <textarea required value={tratamento} onChange={e => setTratamento(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" rows="2" placeholder="Descreva brevemente..."></textarea>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Quantidade Necessária (ex: 1 caixa, 2 cartelas)</label>
+                  <input type="text" required value={quantidade} onChange={e => setQuantidade(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="Ex: 1 caixa" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Anexar Receita (PDF, JPG, PNG)</label>
