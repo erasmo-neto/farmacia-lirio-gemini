@@ -457,17 +457,33 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
       setErro('');
 
       try {
-        // 1. Criar ou Atualizar Beneficiário automaticamente pelo CPF (Upsert)
-        const { data: beneficioData, error: errB } = await supabase
-          .from('beneficiarios')
-          .upsert([{
-            cpf, nome, whatsapp, endereco
-          }], { onConflict: 'cpf' })
-          .select()
-          .single();
+        let currentBeneficiarioId = null;
 
-        if (errB) throw errB;
-        const currentBeneficiarioId = beneficioData.id;
+        // 1. Verificar explicitamente se o beneficiário já existe pelo CPF
+        const { data: existente } = await supabase
+          .from('beneficiarios')
+          .select('id')
+          .eq('cpf', cpf)
+          .maybeSingle();
+
+        if (existente) {
+          // Se já existe, atualiza os dados e reutiliza o ID
+          currentBeneficiarioId = existente.id;
+          await supabase
+            .from('beneficiarios')
+            .update({ nome, whatsapp, endereco })
+            .eq('id', currentBeneficiarioId);
+        } else {
+          // Se não existe, cria um novo registo e obtém o ID gerado
+          const { data: novoB, error: errB } = await supabase
+            .from('beneficiarios')
+            .insert([{ cpf, nome, whatsapp, endereco }])
+            .select()
+            .single();
+
+          if (errB) throw errB;
+          currentBeneficiarioId = novoB.id;
+        }
 
         // 2. Upload da Receita no Storage (opcional)
         let receita_url = null;
@@ -485,7 +501,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação com o ID correto do beneficiário
+        // 3. Gravar Solicitação com o ID garantido do beneficiário[cite: 8]
         const payloadSolicitacao = {
           protocolo: Math.floor(100000 + Math.random() * 900000),
           beneficiario_id: currentBeneficiarioId,
