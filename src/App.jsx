@@ -461,23 +461,39 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
     const cpfLimpo = cpf.replace(/\D/g, '');
 
     try {
-      // 1. Upsert atômico do Beneficiário garantindo o ID válido por CPF
-      const { data: beneficiarioSalvo, error: errB } = await supabase
-        .from('beneficiarios')
-        .upsert(
-          { 
-            cpf: cpfLimpo, 
-            nome, 
-            whatsapp, 
-            endereco 
-          },
-          { onConflict: 'cpf' }
-        )
-        .select('id')
-        .single();
+      let currentBeneficiarioId = null;
 
-      if (errB) throw errB;
-      const currentBeneficiarioId = beneficiarioSalvo.id;
+      // 1. Verificar explicitamente se o beneficiário já existe pelo CPF limpo
+      const { data: existente, error: errBusca } = await supabase
+        .from('beneficiarios')
+        .select('id')
+        .eq('cpf', cpfLimpo)
+        .maybeSingle();
+
+      if (errBusca) throw errBusca;
+
+      if (existente) {
+        // Se já existe, atualiza os dados e reutiliza o ID existente
+        currentBeneficiarioId = existente.id;
+        const { error: errUpdate } = await supabase
+          .from('beneficiarios')
+          .update({ nome, whatsapp, endereco })
+          .eq('id', currentBeneficiarioId);
+
+        if (errUpdate) throw errUpdate;
+      } else {
+        // Se não existe, cria um novo registo e obtém o ID gerado de forma segura
+        const { data: novoB, error: errB } = await supabase
+          .from('beneficiarios')
+          .insert([{ cpf: cpfLimpo, nome, whatsapp, endereco }])
+          .select('id')
+          .single();
+
+        if (errB) throw errB;
+        if (!novoB || !novoB.id) throw new Error('Não foi possível gerar o ID do beneficiário.');
+        
+        currentBeneficiarioId = novoB.id;
+      }
 
       // 2. Upload da Receita no Storage (opcional)
       let receita_url = null;
