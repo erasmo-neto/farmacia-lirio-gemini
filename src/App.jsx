@@ -488,14 +488,15 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação com um protocolo numérico válido
+        // 3. Gravar Solicitação com os nomes de coluna corretos
         const payloadSolicitacao = {
-          protocolo: Math.floor(100000 + Math.random() * 900000), // Gerado como número inteiro
+          protocolo: Math.floor(100000 + Math.random() * 900000),
           beneficiario_id: currentBeneficiarioId,
           medicamento_id: medicamento.id,
           qtd_solicitada: 1,
           tratamento: tratamento,
           receita_url: receita_url,
+          url_receita: receita_url, // Compatibilidade com a coluna da base de dados
           consentimento_lgpd: consentimento,
           status: 'PENDENTE'
         };
