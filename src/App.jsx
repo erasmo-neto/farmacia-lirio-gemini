@@ -390,36 +390,125 @@ export default function App() {
     );
   };
 
-  const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
-    const [nome, setNome] = useState('');
-    const [cpf, setCpf] = useState('');
-    const [telefone, setTelefone] = useState('');
-    const [quantidade, setQuantidade] = useState(1);
+const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
+    const [step, setStep] = useState(1);
     const [enviando, setEnviando] = useState(false);
+    const [erro, setErro] = useState('');
 
-    const handleEnviarSolicitacao = async (e) => {
+    // Passo 1: Identificação Segura
+    const [cpf, setCpf] = useState('');
+    const [whatsapp4, setWhatsapp4] = useState('');
+
+    // Passo 2: Dados Pessoais
+    const [nome, setNome] = useState('');
+    const [whatsapp, setWhatsapp] = useState('');
+    const [endereco, setEndereco] = useState('');
+    const [beneficiarioId, setBeneficiarioId] = useState(null);
+
+    // Passo 3: Informações Clínicas
+    const [tratamento, setTratamento] = useState('');
+    const [quantidade, setQuantidade] = useState(1);
+    const [receitaFile, setReceitaFile] = useState(null);
+
+    // Passo 4: Consentimento
+    const [consentimento, setConsentimento] = useState(false);
+
+    const handleVerificarIdentificacao = async (e) => {
       e.preventDefault();
+      setErro('');
       setEnviando(true);
 
       try {
-        const { error } = await supabase.from('solicitacoes').insert([
-          {
-            medicamento_id: medicamento.id,
-            nome_paciente: nome,
-            cpf_paciente: cpf,
-            telefone_paciente: telefone,
-            quantidade_solicitada: parseInt(quantidade),
-            status: 'PENDENTE'
-          }
-        ]);
+        // Verifica se o beneficiário existe pelo CPF e final do WhatsApp
+        const { data, error } = await supabase
+          .from('beneficiarios')
+          .select('*')
+          .eq('cpf', cpf)
+          .like('whatsapp', `%${whatsapp4}`);
 
         if (error) throw error;
 
-        alert('Solicitação realizada com sucesso! Sua reserva foi efetuada e passará pela análise da equipe.');
+        // Confirmação Positiva: Pré-preenche os dados
+        if (data && data.length > 0) {
+          const b = data[0];
+          setBeneficiarioId(b.id);
+          setNome(b.nome);
+          setWhatsapp(b.whatsapp);
+          setEndereco(b.endereco);
+        } else {
+          // Sem correspondência: Formulário em branco
+          setBeneficiarioId(null);
+          setNome('');
+          setWhatsapp('');
+          setEndereco('');
+        }
+        setStep(2);
+      } catch (err) {
+        setErro('Erro ao verificar dados. Tente novamente.');
+      } finally {
+        setEnviando(false);
+      }
+    };
+
+    const handleEnviarSolicitacao = async (e) => {
+      e.preventDefault();
+      if (!consentimento) {
+        setErro('É obrigatório aceitar os termos de consentimento.');
+        return;
+      }
+      setEnviando(true);
+      setErro('');
+
+      try {
+        let currentBeneficiarioId = beneficiarioId;
+
+        // 1. Criar ou Atualizar Beneficiário
+        if (currentBeneficiarioId) {
+          await supabase.from('beneficiarios').update({
+            nome, whatsapp, endereco
+          }).eq('id', currentBeneficiarioId);
+        } else {
+          const { data: novoB, error: errB } = await supabase.from('beneficiarios').insert([{
+            cpf, nome, whatsapp, endereco
+          }]).select().single();
+          if (errB) throw errB;
+          currentBeneficiarioId = novoB.id;
+        }
+
+        // 2. Upload da Receita no Storage
+        let receita_url = null;
+        if (receitaFile) {
+          const fileExt = receitaFile.name.split('.').pop();
+          const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+          const filePath = `${currentBeneficiarioId}/${fileName}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from('receitas')
+            .upload(filePath, receitaFile);
+
+          if (uploadError) throw uploadError;
+          receita_url = filePath;
+        }
+
+        // 3. Gravar Solicitação com Consentimento LGPD
+        const { error: errSol } = await supabase.from('solicitacoes').insert([{
+          beneficiario_id: currentBeneficiarioId,
+          medicamento_id: medicamento.id,
+          quantidade_solicitada: parseInt(quantidade),
+          tratamento: tratamento,
+          receita_url: receita_url,
+          consentimento_lgpd: consentimento,
+          status: 'PENDENTE'
+        }]);
+
+        if (errSol) throw errSol;
+
+        alert('✅ Solicitação enviada com sucesso! Aguarde a análise da equipa de triagem.');
         onSuccess();
         onClose();
       } catch (err) {
-        alert('Erro ao enviar solicitação: ' + err.message);
+        console.error(err);
+        setErro('Erro ao enviar solicitação. Verifique os dados ou a ligação.');
       } finally {
         setEnviando(false);
       }
@@ -427,68 +516,117 @@ export default function App() {
 
     return (
       <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-          <div className="bg-emerald-800 text-white p-4 flex justify-between items-center">
+        <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-emerald-800 text-white p-4 flex justify-between items-center shrink-0">
             <h3 className="font-bold">Solicitar {medicamento.nome}</h3>
-            <button onClick={onClose} className="text-emerald-200 hover:text-white">✕</button>
+            <button onClick={onClose} className="text-emerald-200 hover:text-white text-xl leading-none">✕</button>
           </div>
-          <form onSubmit={handleEnviarSolicitacao} className="p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nome Completo do Paciente</label>
-              <input 
-                type="text" 
-                required 
-                value={nome} 
-                onChange={e => setNome(e.target.value)} 
-                className="w-full p-2 border border-slate-300 rounded-lg" 
-                placeholder="Digite seu nome completo"
-              />
+
+          <div className="p-6 overflow-y-auto">
+            {/* Barra de Progresso */}
+            <div className="flex gap-2 mb-6">
+              {[1, 2, 3, 4].map(s => (
+                <div key={s} className={`h-2 flex-1 rounded-full transition-colors ${step >= s ? 'bg-emerald-600' : 'bg-slate-200'}`} />
+              ))}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">CPF</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={cpf} 
-                  onChange={e => setCpf(e.target.value)} 
-                  className="w-full p-2 border border-slate-300 rounded-lg" 
-                  placeholder="000.000.000-00"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Telefone / WhatsApp</label>
-                <input 
-                  type="text" 
-                  required 
-                  value={telefone} 
-                  onChange={e => setTelefone(e.target.value)} 
-                  className="w-full p-2 border border-slate-300 rounded-lg" 
-                  placeholder="(15) 99999-9999"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Quantidade Solicitada</label>
-              <input 
-                type="number" 
-                min="1" 
-                required 
-                value={quantidade} 
-                onChange={e => setQuantidade(e.target.value)} 
-                className="w-full p-2 border border-slate-300 rounded-lg" 
-              />
-            </div>
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-800">
-              <strong>Atenção:</strong> A retirada dependerá da apresentação da Receita Médica física e documento com foto no local.
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-medium">Cancelar</button>
-              <button type="submit" disabled={enviando} className="bg-emerald-700 text-white font-bold px-4 py-2 rounded-lg">
-                {enviando ? 'Reservando...' : 'Confirmar Reserva'}
-              </button>
-            </div>
-          </form>
+
+            {erro && <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">{erro}</div>}
+
+            {/* PASSO 1: Identificação */}
+            {step === 1 && (
+              <form onSubmit={handleVerificarIdentificacao} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                <p className="text-sm text-slate-600 mb-4">Para começar, informe os seus dados de contacto para verificação de segurança.</p>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">CPF</label>
+                  <input type="text" required value={cpf} onChange={e => setCpf(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="000.000.000-00" inputMode="numeric" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Últimos 4 dígitos do WhatsApp</label>
+                  <input type="text" required maxLength="4" value={whatsapp4} onChange={e => setWhatsapp4(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="Ex: 9999" inputMode="numeric" />
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <button type="button" onClick={onClose} className="px-4 py-2 text-slate-500 font-medium hover:bg-slate-100 rounded-lg">Cancelar</button>
+                  <button type="submit" disabled={enviando} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg transition-colors">{enviando ? 'A verificar...' : 'Continuar'}</button>
+                </div>
+              </form>
+            )}
+
+            {/* PASSO 2: Dados Pessoais */}
+            {step === 2 && (
+              <form onSubmit={(e) => { e.preventDefault(); setStep(3); }} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                <p className="text-sm text-slate-600 mb-4">Confirme ou atualize as suas informações para o atendimento.</p>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nome Completo</label>
+                  <input type="text" required value={nome} onChange={e => setNome(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="Ex: João Silva" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">WhatsApp (com DDD)</label>
+                  <input type="text" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="(15) 99999-9999" inputMode="numeric" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Endereço Completo</label>
+                  <textarea required value={endereco} onChange={e => setEndereco(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" rows="2" placeholder="Rua, número, bairro, Tatuí/SP"></textarea>
+                </div>
+                <div className="flex justify-between pt-4">
+                  <button type="button" onClick={() => setStep(1)} className="px-4 py-2 text-slate-500 font-medium hover:bg-slate-100 rounded-lg">Voltar</button>
+                  <button type="submit" className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg transition-colors">Continuar</button>
+                </div>
+              </form>
+            )}
+
+            {/* PASSO 3: Informações Clínicas */}
+            {step === 3 && (
+              <form onSubmit={(e) => { e.preventDefault(); setStep(4); }} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                <p className="text-sm text-slate-600 mb-4">Detalhes do medicamento e tratamento.</p>
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <p className="text-xs text-slate-500 uppercase font-bold">Medicamento Solicitado</p>
+                  <p className="font-bold text-slate-800">{medicamento.nome} <span className="font-normal text-sm">({medicamento.principio})</span></p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Para qual tratamento utiliza?</label>
+                    <textarea required value={tratamento} onChange={e => setTratamento(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" rows="2" placeholder="Descreva brevemente..."></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Qtd. (Caixas)</label>
+                    <input type="number" min="1" required value={quantidade} onChange={e => setQuantidade(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Anexar Receita (PDF, JPG, PNG)</label>
+                  <input type="file" accept=".pdf,image/png,image/jpeg" onChange={e => setReceitaFile(e.target.files[0])} className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" />
+                </div>
+                <div className="flex justify-between pt-4">
+                  <button type="button" onClick={() => setStep(2)} className="px-4 py-2 text-slate-500 font-medium hover:bg-slate-100 rounded-lg">Voltar</button>
+                  <button type="submit" className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg transition-colors">Continuar</button>
+                </div>
+              </form>
+            )}
+
+            {/* PASSO 4: Consentimento LGPD */}
+            {step === 4 && (
+              <form onSubmit={handleEnviarSolicitacao} className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 text-sm text-amber-900 mb-4">
+                  <strong className="block mb-1">Quase pronto!</strong>
+                  Lembre-se: A retirada dependerá da apresentação da Receita Médica física e documento com foto no local.
+                </div>
+                
+                <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" required checked={consentimento} onChange={e => setConsentimento(e.target.checked)} className="mt-1 w-4 h-4 text-emerald-600 rounded cursor-pointer" />
+                  <span className="text-sm text-slate-700 leading-relaxed">
+                    Declaro que li e concordo com o uso dos meus dados para análise da solicitação pela equipa responsável da Farmácia Solidária Lírio dos Vales.
+                  </span>
+                </label>
+
+                <div className="flex justify-between pt-4">
+                  <button type="button" onClick={() => setStep(3)} className="px-4 py-2 text-slate-500 font-medium hover:bg-slate-100 rounded-lg">Voltar</button>
+                  <button type="submit" disabled={enviando || !consentimento} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {enviando ? 'A enviar...' : 'Enviar Solicitação'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </div>
     );
