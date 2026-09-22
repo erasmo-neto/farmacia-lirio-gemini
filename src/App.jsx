@@ -457,20 +457,17 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
       setErro('');
 
       try {
-        let currentBeneficiarioId = beneficiarioId;
-
-        // 1. Criar ou Atualizar Beneficiário
-        if (currentBeneficiarioId) {
-          await supabase.from('beneficiarios').update({
-            nome, whatsapp, endereco
-          }).eq('id', currentBeneficiarioId);
-        } else {
-          const { data: novoB, error: errB } = await supabase.from('beneficiarios').insert([{
+        // 1. Criar ou Atualizar Beneficiário automaticamente pelo CPF (Upsert)
+        const { data: beneficioData, error: errB } = await supabase
+          .from('beneficiarios')
+          .upsert([{
             cpf, nome, whatsapp, endereco
-          }]).select().single();
-          if (errB) throw errB;
-          currentBeneficiarioId = novoB.id;
-        }
+          }], { onConflict: 'cpf' })
+          .select()
+          .single();
+
+        if (errB) throw errB;
+        const currentBeneficiarioId = beneficioData.id;
 
         // 2. Upload da Receita no Storage (opcional)
         let receita_url = null;
@@ -488,7 +485,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação com os nomes de coluna corretos
+        // 3. Gravar Solicitação com o ID correto do beneficiário
         const payloadSolicitacao = {
           protocolo: Math.floor(100000 + Math.random() * 900000),
           beneficiario_id: currentBeneficiarioId,
@@ -496,7 +493,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           qtd_solicitada: 1,
           tratamento: tratamento,
           receita_url: receita_url,
-          url_receita: receita_url, // Compatibilidade com a coluna da base de dados
+          url_receita: receita_url,
           consentimento_lgpd: consentimento,
           status: 'PENDENTE'
         };
@@ -510,7 +507,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
         onClose();
       } catch (err) {
         console.error(err);
-        setErro('Erro do Supabase: ' + err.message); // Exibe o erro técnico exato na tela
+        setErro('Erro do Supabase: ' + err.message);
       } finally {
         setEnviando(false);
       }
