@@ -488,9 +488,9 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
           }
         }
 
-        // 3. Gravar Solicitação com o protocolo gerado automaticamente
+        // 3. Gravar Solicitação com um protocolo numérico válido
         const payloadSolicitacao = {
-          protocolo: 'SOL-' + Math.floor(100000 + Math.random() * 900000),
+          protocolo: Math.floor(100000 + Math.random() * 900000), // Gerado como número inteiro
           beneficiario_id: currentBeneficiarioId,
           medicamento_id: medicamento.id,
           qtd_solicitada: 1,
