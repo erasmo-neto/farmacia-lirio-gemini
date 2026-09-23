@@ -233,11 +233,11 @@ const formatarApresentacao = (apresentacao) => {
                 <h3 className="font-bold text-lg text-slate-800">{med.nome}</h3>
                 <p className="text-sm text-slate-500 mt-1">{med.principio}</p>
                             {med.apresentacao && (
-                <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Box className="w-4 h-4 text-emerald-600" />
-                  <span>{formatarApresentacao(med.apresentacao)}</span>
-                </div>
-              )}
+  <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+    <Box className="w-4 h-4 text-emerald-600" />
+    <span>Caixa com {formatarApresentacao(med.apresentacao)}</span>
+  </div>
+)}
               </div>
 
               <div className="bg-slate-50 p-4 border-t border-slate-100">
