@@ -64,7 +64,20 @@ export default function App() {
       }
 
       // Buscar Solicitações
-      const { data: dadosSol, error: erroSol } = await supabase.from('solicitacoes').select('*').order('created_at', { ascending: false });
+      const { data: dadosSol, error: erroSol } =
+  await supabase
+    .from('solicitacoes')
+    .select(`
+      *,
+      beneficiarios (
+        id,
+        nome,
+        cpf,
+        whatsapp,
+        endereco
+      )
+    `)
+    .order('created_at', { ascending: false });
       if (!erroSol && dadosSol) {
         setSolicitacoes(dadosSol);
       }
@@ -324,11 +337,20 @@ export default function App() {
                           </span>
                           <span className="text-xs text-slate-400">{new Date(sol.created_at).toLocaleDateString('pt-BR')}</span>
                         </div>
-                        <h4 className="font-bold text-slate-800 text-lg">{sol.nome_paciente}</h4>
-                        <p className="text-sm text-slate-600">CPF: {sol.cpf_paciente} | Tel: {sol.telefone_paciente}</p>
-                        <div className="mt-2 bg-white p-2 rounded border border-slate-200 text-sm">
-                          <strong>Solicitou:</strong> {sol.quantidade_solicitada}x {med?.nome || 'Medicamento'} ({med?.principio})
-                        </div>
+                        <h4 className="font-bold text-slate-800 text-lg">
+  {sol.beneficiarios?.nome || 'Beneficiário não identificado'}
+</h4>
+
+<p className="text-sm text-slate-600">
+  CPF: {sol.beneficiarios?.cpf || 'Não informado'} |
+  Tel: {sol.beneficiarios?.whatsapp || 'Não informado'}
+</p>
+
+<div className="mt-2 bg-white p-2 rounded border border-slate-200 text-sm">
+  <strong>Solicitou:</strong>{' '}
+  {sol.qtd_solicitada || 0}x {med?.nome || 'Medicamento'}
+  {med?.principio ? ` (${med.principio})` : ''}
+'</div>
                       </div>
 
                       {sol.status === 'PENDENTE' && (
@@ -407,7 +429,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
 
   // Passo 3: Informações Clínicas
   const [tratamento, setTratamento] = useState('');
-  const [quantidade, setQuantidade] = useState('1 caixa');
+  const [quantidade, setQuantidade] = useState(1);
   const [receitaFile, setReceitaFile] = useState(null);
 
   // Passo 4: Consentimento
@@ -516,7 +538,7 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
         protocolo: Math.floor(100000 + Math.random() * 900000),
         beneficiario_id: currentBeneficiarioId,
         medicamento_id: medicamento.id,
-        qtd_solicitada: 1,
+        qtd_solicitada: quantidade,
         tratamento: tratamento,
         receita_url: receita_url,
         url_receita: receita_url,
@@ -612,9 +634,20 @@ const ModalSolicitacaoPaciente = ({ medicamento, onClose, onSuccess }) => {
                 <textarea required value={tratamento} onChange={e => setTratamento(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" rows="2" placeholder="Descreva brevemente..."></textarea>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Quantidade Necessária (ex: 1 caixa, 2 cartelas)</label>
-                <input type="text" required value={quantidade} onChange={e => setQuantidade(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500" placeholder="Ex: 1 caixa" />
-              </div>
+  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+    Quantidade Necessária
+  </label>
+
+  <input
+    type="number"
+    min="1"
+    required
+    value={quantidade}
+    onChange={e => setQuantidade(Number(e.target.value))}
+    className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-emerald-500"
+    placeholder="Ex: 1"
+  />
+</div>
               <div>
                 <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Anexar Receita (PDF, JPG, PNG)</label>
                 <input type="file" accept=".pdf,image/png,image/jpeg" onChange={e => setReceitaFile(e.target.files[0])} className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" />
