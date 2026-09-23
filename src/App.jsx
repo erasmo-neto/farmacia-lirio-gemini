@@ -232,19 +232,27 @@ const formatarApresentacao = (apresentacao) => {
                 </span>
                 <h3 className="font-bold text-lg text-slate-800">{med.nome}</h3>
                 <p className="text-sm text-slate-500 mt-1">{med.principio}</p>
+                            {med.apresentacao && (
+                <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Box className="w-4 h-4 text-emerald-600" />
+                  <span>{formatarApresentacao(med.apresentacao)}</span>
+                </div>
+              )}
               </div>
-              {med.apresentacao && (
-  <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-    <Box className="w-4 h-4 text-emerald-600" />
-    <span>{formatarApresentacao(med.apresentacao)}</span>
-  </div>
-)}
+
+              <div className="bg-slate-50 p-4 border-t border-slate-100">
+                <button
+                  onClick={() => {
+                    setMedicamentoSelecionado(med);
+                    setShowModalSolicitacao(true);
+                  }}
                   className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <FileText className="w-4 h-4" /> Solicitar e Reservar
                 </button>
               </div>
             </div>
+                
           ))}
           {medicamentosFiltrados.length === 0 && (
             <div className="col-span-full py-12 text-center text-slate-500">
@@ -364,7 +372,7 @@ const formatarApresentacao = (apresentacao) => {
   <strong>Solicitou:</strong>{' '}
   {sol.qtd_solicitada || 0}x {med?.nome || 'Medicamento'}
   {med?.principio ? ` (${med.principio})` : ''}
-'</div>
+</div>
                       </div>
 
                       {sol.status === 'PENDENTE' && (
