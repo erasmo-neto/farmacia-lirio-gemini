@@ -41,13 +41,14 @@ export default function App() {
       // Buscar Medicamentos
       const { data: dadosMed, error: erroMed } = await supabase.from('medicamentos').select('*');
       if (!erroMed && dadosMed) {
-        setMedicamentos(dadosMed.map(m => ({
-          id: m.id,
-          nome: m.nome_comercial,
-          principio: m.principio_ativo,
-          categoria: m.categoria || 'Outros'
-        })));
-      }
+  setMedicamentos(dadosMed.map(m => ({
+    id: m.id,
+    nome: m.nome_comercial,
+    principio: m.principio_ativo,
+    categoria: m.categoria || 'Outros',
+    apresentacao: m.forma_farmaceutica || null
+  })));
+}
 
       // Buscar Lotes / Estoque
       const { data: dadosLotes, error: erroLotes } = await supabase.from('estoque_lotes').select('*');
@@ -85,6 +86,19 @@ export default function App() {
       console.error('Erro ao conectar com o Supabase:', error);
     }
   }
+
+  // ✅ COLE AQUI
+const formatarApresentacao = (apresentacao) => {
+  if (!apresentacao) return null;
+
+  return apresentacao
+    .replace(/\bcp\b/gi, 'comprimidos')
+    .replace(/\bco\b/gi, 'comprimidos')
+    .replace(/\bdrágeas\b/gi, 'drágeas')
+    .replace(/\bsachés\b/gi, 'sachês')
+    .replace(/\benv\b/gi, 'envelopes')
+    .replace(/\bbisn\b/gi, 'bisnaga');
+};
 
   // --- COMPONENTES DAS PÁGINAS ---
 
@@ -219,12 +233,12 @@ export default function App() {
                 <h3 className="font-bold text-lg text-slate-800">{med.nome}</h3>
                 <p className="text-sm text-slate-500 mt-1">{med.principio}</p>
               </div>
-              <div className="bg-slate-50 p-4 border-t border-slate-100">
-                <button 
-                  onClick={() => {
-                    setMedicamentoSelecionado(med);
-                    setShowModalSolicitacao(true);
-                  }}
+              {med.apresentacao && (
+  <div className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+    <Box className="w-4 h-4 text-emerald-600" />
+    <span>{formatarApresentacao(med.apresentacao)}</span>
+  </div>
+)}
                   className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2 rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <FileText className="w-4 h-4" /> Solicitar e Reservar
